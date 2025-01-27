@@ -1,0 +1,45 @@
+name: Update Binaries
+on: 
+  schedule:
+    - cron: 0 0 * * * # runs daily at midnight
+  workflow_dispatch: 
+
+jobs:
+  butler:
+    # This will only consider release versions
+    name: Update Butler
+    runs-on: ubuntu-22.04
+    env:
+      RELEASE_WINDOWS_URL: https://broth.itch.ovh/butler/windows-amd64/LATEST/archive/default
+      RELEASE_LINUX_URL: https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+      - name: Print current Butler version
+        run: chmod +x ./Binaries/butler && ./Binaries/butler --version
+      - name: Fetch latest Butler release
+        run: |
+          # fetch windows
+          wget -O butler-win.zip $RELEASE_WINDOWS_URL
+          unzip -o -d Binaries/ butler-win.zip
+          # fetch linux
+          wget -O butler-linux.zip $RELEASE_LINUX_URL
+          unzip -o -d Binaries/ butler-linux.zip
+          chmod +x Binaries/butler
+          # clean up
+          rm -f butler-win.zip butler-linux.zip
+      - name: Check for differences and commit new version
+        run: |
+          set +e # Disable immediate exit on error
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          # commit only if there are differences
+          git add Binaries/ && \
+          git --no-pager diff --staged && \
+          git commit -m "Update Butler to version \"$(./Binaries/butler --version 2>&1)\""
+          set -e
+          if [ $? -eq 0 ]; then
+            git push
+          else
+            echo "Downloaded version is the same as installed."
+          fi
